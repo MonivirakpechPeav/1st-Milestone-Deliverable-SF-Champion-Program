@@ -5,8 +5,10 @@ feature surface and keep the project's unique scoring features clearly
 separated from the read-only Horizon mirrors.
 """
 import os
+import sys
 
 import streamlit as st
+from streamlit.runtime import exists as streamlit_runtime_exists
 
 from app.ui import landing, scan, sidebar, styles
 from app.ui.tabs import (
@@ -31,6 +33,77 @@ from app.ui.tabs import (
 )
 
 
+def _ensure_streamlit_runtime():
+    """Exit with a useful message when the app is launched as plain Python."""
+    if streamlit_runtime_exists():
+        return
+
+    app_path = os.path.abspath(__file__)
+    print(
+        "\nThis is a Streamlit app. Start it with:\n\n"
+        f"  streamlit run {app_path}\n\n"
+        "Running `python main.py` starts Streamlit in bare mode and cannot "
+        "open the app session or Snowflake connection.\n"
+    )
+    sys.exit(1)
+
+
+def _connection_ttl():
+    value = os.getenv("SNOWFLAKE_CONNECTION_TTL")
+    if value and value.isdigit():
+        return int(value)
+    return value
+
+
+def _connect_snowflake():
+    try:
+        return st.connection("snowflake", ttl=_connection_ttl())
+    except Exception as exc:
+        details = str(exc)
+        st.error("Could not connect to Snowflake.")
+        st.caption(f"{type(exc).__name__}: {details}")
+
+        if "404 Not Found" in details and "login-request" in details:
+            st.info(
+                "Snowflake returned 404 for the account host. Check "
+                "`[connections.snowflake].account` in `.streamlit/secrets.toml`; "
+                "it usually needs the full account identifier from your Snowflake "
+                "URL, not just the short locator."
+            )
+        elif "Could not connect to Snowflake backend" in details:
+            st.info(
+                "The account host no longer looks like a 404, but Snowflake did "
+                "not complete login. Verify the auth method in "
+                "`.streamlit/secrets.toml` matches your Snowflake setup "
+                "(password, external browser/OAuth, or key-pair auth), and check "
+                "VPN/proxy rules if your account requires them."
+            )
+        else:
+            st.info(
+                "Check `.streamlit/secrets.toml` and confirm the account, user, "
+                "password or authenticator, role, and warehouse are valid."
+            )
+
+        with st.expander("Expected local secrets format"):
+            st.code(
+                """[connections.snowflake]
+account = "orgname-accountname"
+# Or, for locator-style URLs:
+# account = "ve82242.ap-southeast-1.aws"
+user = "YOUR_USER"
+password = "YOUR_PASSWORD"
+role = "ACCOUNTADMIN"
+warehouse = "COMPUTE_WH"
+""",
+                language="toml",
+            )
+
+        st.stop()
+
+
+_ensure_streamlit_runtime()
+
+
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Data Governance Agent",
@@ -41,7 +114,7 @@ st.set_page_config(
 styles.inject()
 
 # ── Snowflake connection ─────────────────────────────────────────────────────
-conn = st.connection("snowflake", ttl=os.getenv("SNOWFLAKE_CONNECTION_TTL"))
+conn = _connect_snowflake()
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 selected_db, selected_schema, run_scan, dbs, history_db = sidebar.render(conn)
