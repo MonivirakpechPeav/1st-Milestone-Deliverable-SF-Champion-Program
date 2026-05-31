@@ -10,19 +10,142 @@ The Data Governance Agent is a Streamlit-in-Snowflake application that mirrors t
 - **Query warehouse:** `COMPUTE_WH`
 - **Python:** >= 3.11, `streamlit[snowflake] >= 1.54.0`
 
-### Local Run
+---
 
-Create `.streamlit/secrets.toml` from `.streamlit/secrets.toml.example`, then start the app with:
+## 2. Configuration
 
-```bash
-streamlit run main.py
+### 2.1 Prerequisites
+
+| Requirement | Version |
+|---|---|
+| Python | >= 3.11 |
+| pip | Latest stable |
+| Snowflake account | Enterprise edition or higher (for Horizon Catalog features) |
+| Snowflake CLI (`snow`) | >= 2.0 (for Streamlit-in-Snowflake deployment only) |
+
+### 2.2 Local Development Setup
+
+1. **Clone the repository:**
+
+   ```bash
+   git clone <repository-url>
+   cd 1st-Milestone-Deliverable-SF-Champion-Program
+   ```
+
+2. **Create and activate a virtual environment:**
+
+   ```bash
+   python -m venv .venv
+   # Windows
+   .venv\Scripts\activate
+   # macOS / Linux
+   source .venv/bin/activate
+   ```
+
+3. **Install dependencies:**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Configure Snowflake credentials:**
+
+   Copy the example secrets file and fill in your Snowflake connection details:
+
+   ```bash
+   cp .streamlit/secrets.toml.example .streamlit/secrets.toml
+   ```
+
+   Edit `.streamlit/secrets.toml` with your credentials:
+
+   ```toml
+   [connections.snowflake]
+   account = "orgname-accountname"
+   user = "YOUR_USER"
+   password = "YOUR_PASSWORD"
+   role = "ACCOUNTADMIN"
+   warehouse = "COMPUTE_WH"
+   ```
+
+   > **Note:** The `account` value must be the account identifier from your Snowflake URL. For `https://orgname-accountname.snowflakecomputing.com`, use `orgname-accountname`. For locator-style URLs, include the region and cloud suffix (e.g., `ve82242.ap-southeast-1.aws`).
+
+   > **Security:** Never commit `.streamlit/secrets.toml` to version control. It is excluded via `.gitignore`.
+
+5. **Run the application:**
+
+   ```bash
+   streamlit run main.py
+   ```
+
+   The application will open at `http://localhost:8501` by default.
+
+### 2.3 Snowflake Permissions
+
+The role specified in `secrets.toml` (or the owner role for Streamlit-in-Snowflake deployment) requires the following grants:
+
+| Permission | Purpose |
+|---|---|
+| `USAGE` on target databases | Scanning inventory and policies |
+| `SELECT` on `SNOWFLAKE.ACCOUNT_USAGE` views | RBAC audit, access history, tags, lineage, DMF, classification |
+| `USAGE` on the designated warehouse | Query execution |
+| `CREATE SCHEMA`, `CREATE TABLE` on the history database | Scan history persistence |
+| `SNOWFLAKE.TRUST_CENTER` access | Trust Center findings and scanners |
+| `SNOWFLAKE.CORTEX.COMPLETE` access | AI-generated documentation via Cortex |
+
+Features that depend on inaccessible views degrade gracefully — the application returns neutral scores or empty results rather than failing.
+
+### 2.4 Application Configuration
+
+All tunable constants are centralized in `app/config.py`:
+
+| Constant | Default | Purpose |
+|---|---|---|
+| `PII_CATEGORIES` | 12 regex patterns | Name-based PII detection rules |
+| `PRIVILEGED_ROLES` | `ACCOUNTADMIN`, `SECURITYADMIN`, `SYSADMIN`, `ORGADMIN` | Roles flagged as high-risk in RBAC audit |
+| `HISTORY_SCHEMA` | `GOVERNANCE_AGENT` | Schema name for scan history persistence |
+| `HISTORY_TABLE` | `SCAN_HISTORY` | Table name for scan history persistence |
+| `GRADE_BANDS` | A (≥90), B (≥75), C (≥60), D (≥40), F (<40) | Score-to-grade mapping with associated colors |
+
+To customize behavior (e.g., adding PII patterns, adjusting grade thresholds, or changing privileged role definitions), modify the corresponding constants in `app/config.py`.
+
+### 2.5 UI Theme
+
+The Streamlit theme is defined in `.streamlit/config.toml` and applies a Snowflake-branded blue palette:
+
+```toml
+[theme]
+primaryColor = "#29B5E8"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F8FF"
+textColor = "#1a1a2e"
+font = "sans serif"
 ```
 
-The Snowflake `account` value must be the account identifier from your Snowflake URL. For example, use `orgname-accountname` for `https://orgname-accountname.snowflakecomputing.com`, or include the region/cloud for locator-style URLs such as `ve82242.ap-southeast-1.aws`.
+Modify this file to adjust the visual appearance of the application.
+
+### 2.6 Deploying to Snowflake
+
+To deploy as a Streamlit-in-Snowflake application:
+
+1. **Install the Snowflake CLI** (if not already installed):
+
+   ```bash
+   pip install snowflake-cli
+   ```
+
+2. **Configure a CLI connection** targeting your Snowflake account.
+
+3. **Deploy the application:**
+
+   ```bash
+   snow streamlit deploy --replace
+   ```
+
+   This uses the `snowflake.yml` manifest to deploy the app to the configured identifier (`USER$PHANSIVANG.PUBLIC.GOVERNANCE_AGENT`). Update the `identifier`, `query_warehouse`, and `compute_pool` fields in `snowflake.yml` to match your environment before deploying.
 
 ---
 
-## 2. High-Level Component Diagram
+## 3. High-Level Component Diagram
 
 ```
                 ┌──────────────────────────────────────────┐
@@ -32,8 +155,8 @@ The Snowflake `account` value must be the account identifier from your Snowflake
                                     │
           ┌─────────────────────────┼──────────────────────────┐
           ▼                         ▼                          ▼
-     app/ui/                  app/services/
-  (presentation)            (Snowflake logic)
+     app/ui/                  app/services/              app/config.py
+  (presentation)            (Snowflake logic)          (constants)
                                     │
                                     ▼
                ┌────────────────────────────────────────┐
@@ -46,7 +169,7 @@ The Snowflake `account` value must be the account identifier from your Snowflake
 
 ---
 
-## 3. Directory Layout
+## 4. Directory Layout
 
 ```
 governance_agent/
@@ -111,7 +234,7 @@ governance_agent/
 
 ---
 
-## 4. Layered Architecture
+## 5. Layered Architecture
 
 The codebase follows a strict three-layer separation:
 
@@ -125,7 +248,7 @@ The codebase follows a strict three-layer separation:
 
 ---
 
-## 5. UI Section Layout
+## 6. UI Section Layout
 
 After a scan completes, the report is organized into three sections selectable via a top-level radio:
 
@@ -139,7 +262,7 @@ Before any scan is run, the sidebar shows a pre-scan menu offering a Home landin
 
 ---
 
-## 6. Scan Pipeline
+## 7. Scan Pipeline
 
 A scan triggered from the sidebar executes the following steps in `app/ui/scan.py`:
 
@@ -147,13 +270,13 @@ A scan triggered from the sidebar executes the following steps in `app/ui/scan.p
 2. **PII Detection** (`services/pii.py`) — regex match of column names against `PII_CATEGORIES` from `config.py` (12 categories, name-based, zero data-read cost).
 3. **Policy Coverage** (`services/policies.py`) — `INFORMATION_SCHEMA.POLICY_REFERENCES` for masking, row-access, and projection policy assignments.
 4. **RBAC Audit** (`services/rbac.py`) — `SNOWFLAKE.ACCOUNT_USAGE.GRANTS_TO_USERS` / `GRANTS_TO_ROLES` for privileged users and `PUBLIC` grants.
-5. **Scoring** (`services/scoring.py`) — four 25-point pillars (see §7).
+5. **Scoring** (`services/scoring.py`) — four 25-point pillars (see §8).
 6. **Persistence** (`services/history.py`) — appends one row to `<history_db>.GOVERNANCE_AGENT.SCAN_HISTORY`.
 7. **Render** — the full result dict is stored in `st.session_state["scan_results"]` and consumed by every tab.
 
 ---
 
-## 7. Governance Scoring Model
+## 8. Governance Scoring Model
 
 `scoring.py` computes a **0–100 score** across four 25-point pillars and a letter grade via `GRADE_BANDS`.
 
@@ -178,7 +301,7 @@ Each pillar also returns a one-line `note` (e.g., `"3/14 PII columns masked"`) u
 
 ---
 
-## 8. Horizon Catalog Feature Mapping
+## 9. Horizon Catalog Feature Mapping
 
 The **Horizon Catalog** section mirrors every Snowflake Horizon primitive in a single read-only UI:
 
@@ -198,7 +321,7 @@ The **Horizon Catalog** section mirrors every Snowflake Horizon primitive in a s
 
 ---
 
-## 9. Project-Unique Features
+## 10. Project-Unique Features
 
 These live in the **Insights** and **Governance Actions** sections and have no direct Horizon equivalent:
 
@@ -211,7 +334,7 @@ These live in the **Insights** and **Governance Actions** sections and have no d
 
 ---
 
-## 10. Persistence Model
+## 11. Persistence Model
 
 A dedicated history database (chosen in the sidebar) holds:
 
@@ -220,7 +343,7 @@ A dedicated history database (chosen in the sidebar) holds:
 
 ---
 
-## 11. Setup Wizard
+## 12. Setup Wizard
 
 `app/ui/tabs/setup_wizard.py` provides a five-step guided form for Horizon Catalog configuration that replaces navigating multiple Snowsight pages:
 
@@ -236,7 +359,7 @@ Each step previews the generated SQL before executing it, and execution errors s
 
 ---
 
-## 12. Integrations
+## 13. Integrations
 
 | Integration | Used for |
 |---|---|
@@ -249,7 +372,7 @@ Each step previews the generated SQL before executing it, and execution errors s
 
 ---
 
-## 13. Configuration Surface
+## 14. Configuration Surface
 
 All tunable values live in `app/config.py`:
 
@@ -263,7 +386,7 @@ All tunable values live in `app/config.py`:
 
 ---
 
-## 14. Security & Permissions
+## 15. Security & Permissions
 
 The application runs `execute_as: OWNER`. The owner role must have:
 
@@ -277,7 +400,7 @@ All identifiers from user input flow through `_common.safe_id` / `clean_db` to p
 
 ---
 
-## 15. Deployment
+## 16. Deployment
 
 Defined in `snowflake.yml`:
 
@@ -305,7 +428,7 @@ entities:
 
 ---
 
-## 16. Testing
+## 17. Testing
 
 A `pytest` test suite lives in `tests/` covering every service module. Each test file mocks the Snowflake connection and validates SQL construction, scoring logic, and edge-case handling (missing data, inaccessible `ACCOUNT_USAGE`, empty DataFrames).
 
@@ -323,7 +446,7 @@ pytest -q
 
 ---
 
-## 17. Extension Points
+## 18. Extension Points
 
 - **New PII category:** add a regex entry to `PII_CATEGORIES` in `config.py`.
 - **New scoring pillar:** add a `_score_*` function in `services/scoring.py` and include it in `compute_governance_score()` (total is the sum of the four 25-point pillars).
