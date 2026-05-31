@@ -1,0 +1,7 @@
+streamlit[snowflake]>=1.54.0
+pandas
+altair
+numba>=0.56.0
+
+# dev
+pytest>=8.0.0

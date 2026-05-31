@@ -1,0 +1,20 @@
+# created-by: streamlit-in-workspaces; skill-version=1.0.0
+definition_version: 2
+entities:
+  streamlit_app:
+    type: streamlit
+    identifier:
+      database: USER$PHANSIVANG
+      schema: PUBLIC
+      name: GOVERNANCE_AGENT
+    title: governance_agent
+    query_warehouse: COMPUTE_WH
+    compute_pool: SYSTEM_COMPUTE_POOL_CPU
+    run_mode: SpcsOnly
+    execute_as: OWNER
+    main_file: main.py
+    artifacts:
+      - pyproject.toml
+      - main.py
+      - app/
+      - .streamlit/config.toml
