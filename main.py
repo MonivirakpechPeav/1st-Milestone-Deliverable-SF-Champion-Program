@@ -93,7 +93,7 @@ account = "orgname-accountname"
 user = "YOUR_USER"
 password = "YOUR_PASSWORD"
 role = "ACCOUNTADMIN"
-warehouse = "COMPUTE_WH"
+warehouse = "SANDBOX_WH"
 """,
                 language="toml",
             )

@@ -4,11 +4,11 @@ entities:
   streamlit_app:
     type: streamlit
     identifier:
-      database: USER$PHANSIVANG
+      database: <YOUR_DATABASE>
       schema: PUBLIC
       name: GOVERNANCE_AGENT
     title: governance_agent
-    query_warehouse: COMPUTE_WH
+    query_warehouse: SANDBOX_WH
     compute_pool: SYSTEM_COMPUTE_POOL_CPU
     run_mode: SpcsOnly
     execute_as: OWNER

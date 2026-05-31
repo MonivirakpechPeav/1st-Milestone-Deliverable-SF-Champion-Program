@@ -1,20 +1,12 @@
-# Data Governance Agent — Project Architecture
+# Data Governance Agent
 
-## 1. Overview
-
-The Data Governance Agent is a Streamlit-in-Snowflake application that mirrors the complete **Snowflake Horizon Catalog** feature surface in a single UI, then adds two project-unique capabilities on top: a multi-pillar governance score and scan history trend tracking.
-
-- **Runtime:** Streamlit-in-Snowflake (SPCS, `SYSTEM_COMPUTE_POOL_CPU`)
-- **Entry point:** `main.py`
-- **Identifier:** <catalog_object db="USER$PHANSIVANG" schema="PUBLIC" name="GOVERNANCE_AGENT" type="streamlit" />
-- **Query warehouse:** `COMPUTE_WH`
-- **Python:** >= 3.11, `streamlit[snowflake] >= 1.54.0`
+A Streamlit in Snowflake app to assess and monitor data governance posture across databases and schemas, providing a unified governance score, scan history tracking, and actionable remediation insights powered by Snowflake Horizon Catalog capabilities.
 
 ---
 
-## 2. Configuration
+## 1. Configuration
 
-### 2.1 Prerequisites
+### 1.1 Prerequisites
 
 | Requirement | Version |
 |---|---|
@@ -23,7 +15,7 @@ The Data Governance Agent is a Streamlit-in-Snowflake application that mirrors t
 | Snowflake account | Enterprise edition or higher (for Horizon Catalog features) |
 | Snowflake CLI (`snow`) | >= 2.0 (for Streamlit-in-Snowflake deployment only) |
 
-### 2.2 Local Development Setup
+### 1.2 Local Development Setup
 
 1. **Clone the repository:**
 
@@ -64,7 +56,7 @@ The Data Governance Agent is a Streamlit-in-Snowflake application that mirrors t
    user = "YOUR_USER"
    password = "YOUR_PASSWORD"
    role = "ACCOUNTADMIN"
-   warehouse = "COMPUTE_WH"
+   warehouse = "SANDBOX_WH"
    ```
 
    > **Note:** The `account` value must be the account identifier from your Snowflake URL. For `https://orgname-accountname.snowflakecomputing.com`, use `orgname-accountname`. For locator-style URLs, include the region and cloud suffix (e.g., `ve82242.ap-southeast-1.aws`).
@@ -79,7 +71,7 @@ The Data Governance Agent is a Streamlit-in-Snowflake application that mirrors t
 
    The application will open at `http://localhost:8501` by default.
 
-### 2.3 Snowflake Permissions
+### 1.3 Snowflake Permissions
 
 The role specified in `secrets.toml` (or the owner role for Streamlit-in-Snowflake deployment) requires the following grants:
 
@@ -94,7 +86,7 @@ The role specified in `secrets.toml` (or the owner role for Streamlit-in-Snowfla
 
 Features that depend on inaccessible views degrade gracefully — the application returns neutral scores or empty results rather than failing.
 
-### 2.4 Application Configuration
+### 1.4 Application Configuration
 
 All tunable constants are centralized in `app/config.py`:
 
@@ -108,7 +100,7 @@ All tunable constants are centralized in `app/config.py`:
 
 To customize behavior (e.g., adding PII patterns, adjusting grade thresholds, or changing privileged role definitions), modify the corresponding constants in `app/config.py`.
 
-### 2.5 UI Theme
+### 1.5 UI Theme
 
 The Streamlit theme is defined in `.streamlit/config.toml` and applies a Snowflake-branded blue palette:
 
@@ -123,7 +115,7 @@ font = "sans serif"
 
 Modify this file to adjust the visual appearance of the application.
 
-### 2.6 Deploying to Snowflake
+### 1.6 Deploying to Snowflake
 
 To deploy as a Streamlit-in-Snowflake application:
 
@@ -141,11 +133,11 @@ To deploy as a Streamlit-in-Snowflake application:
    snow streamlit deploy --replace
    ```
 
-   This uses the `snowflake.yml` manifest to deploy the app to the configured identifier (`USER$PHANSIVANG.PUBLIC.GOVERNANCE_AGENT`). Update the `identifier`, `query_warehouse`, and `compute_pool` fields in `snowflake.yml` to match your environment before deploying.
+   This uses the `snowflake.yml` manifest to deploy the app to the configured identifier. Update the `identifier`, `query_warehouse`, and `compute_pool` fields in `snowflake.yml` to match your environment before deploying.
 
 ---
 
-## 3. High-Level Component Diagram
+## 2. High-Level Component Diagram
 
 ```
                 ┌──────────────────────────────────────────┐
@@ -169,7 +161,7 @@ To deploy as a Streamlit-in-Snowflake application:
 
 ---
 
-## 4. Directory Layout
+## 3. Directory Layout
 
 ```
 governance_agent/
@@ -234,7 +226,7 @@ governance_agent/
 
 ---
 
-## 5. Layered Architecture
+## 4. Layered Architecture
 
 The codebase follows a strict three-layer separation:
 
@@ -248,7 +240,7 @@ The codebase follows a strict three-layer separation:
 
 ---
 
-## 6. UI Section Layout
+## 5. UI Section Layout
 
 After a scan completes, the report is organized into three sections selectable via a top-level radio:
 
@@ -262,7 +254,7 @@ Before any scan is run, the sidebar shows a pre-scan menu offering a Home landin
 
 ---
 
-## 7. Scan Pipeline
+## 6. Scan Pipeline
 
 A scan triggered from the sidebar executes the following steps in `app/ui/scan.py`:
 
@@ -270,13 +262,13 @@ A scan triggered from the sidebar executes the following steps in `app/ui/scan.p
 2. **PII Detection** (`services/pii.py`) — regex match of column names against `PII_CATEGORIES` from `config.py` (12 categories, name-based, zero data-read cost).
 3. **Policy Coverage** (`services/policies.py`) — `INFORMATION_SCHEMA.POLICY_REFERENCES` for masking, row-access, and projection policy assignments.
 4. **RBAC Audit** (`services/rbac.py`) — `SNOWFLAKE.ACCOUNT_USAGE.GRANTS_TO_USERS` / `GRANTS_TO_ROLES` for privileged users and `PUBLIC` grants.
-5. **Scoring** (`services/scoring.py`) — four 25-point pillars (see §8).
+5. **Scoring** (`services/scoring.py`) — four 25-point pillars (see §7).
 6. **Persistence** (`services/history.py`) — appends one row to `<history_db>.GOVERNANCE_AGENT.SCAN_HISTORY`.
 7. **Render** — the full result dict is stored in `st.session_state["scan_results"]` and consumed by every tab.
 
 ---
 
-## 8. Governance Scoring Model
+## 7. Governance Scoring Model
 
 `scoring.py` computes a **0–100 score** across four 25-point pillars and a letter grade via `GRADE_BANDS`.
 
@@ -301,7 +293,7 @@ Each pillar also returns a one-line `note` (e.g., `"3/14 PII columns masked"`) u
 
 ---
 
-## 9. Horizon Catalog Feature Mapping
+## 8. Horizon Catalog Feature Mapping
 
 The **Horizon Catalog** section mirrors every Snowflake Horizon primitive in a single read-only UI:
 
@@ -321,7 +313,7 @@ The **Horizon Catalog** section mirrors every Snowflake Horizon primitive in a s
 
 ---
 
-## 10. Project-Unique Features
+## 9. Project-Unique Features
 
 These live in the **Insights** and **Governance Actions** sections and have no direct Horizon equivalent:
 
@@ -334,7 +326,7 @@ These live in the **Insights** and **Governance Actions** sections and have no d
 
 ---
 
-## 11. Persistence Model
+## 10. Persistence Model
 
 A dedicated history database (chosen in the sidebar) holds:
 
@@ -343,7 +335,7 @@ A dedicated history database (chosen in the sidebar) holds:
 
 ---
 
-## 12. Setup Wizard
+## 11. Setup Wizard
 
 `app/ui/tabs/setup_wizard.py` provides a five-step guided form for Horizon Catalog configuration that replaces navigating multiple Snowsight pages:
 
@@ -359,7 +351,7 @@ Each step previews the generated SQL before executing it, and execution errors s
 
 ---
 
-## 13. Integrations
+## 12. Integrations
 
 | Integration | Used for |
 |---|---|
@@ -372,7 +364,7 @@ Each step previews the generated SQL before executing it, and execution errors s
 
 ---
 
-## 14. Configuration Surface
+## 13. Configuration Surface
 
 All tunable values live in `app/config.py`:
 
@@ -386,13 +378,13 @@ All tunable values live in `app/config.py`:
 
 ---
 
-## 15. Security & Permissions
+## 14. Security & Permissions
 
 The application runs `execute_as: OWNER`. The owner role must have:
 
 - `USAGE` on every database the user may scan.
 - `SELECT` on `SNOWFLAKE.ACCOUNT_USAGE` views for RBAC, access history, tags, lineage, DMF, and classification. Features that cannot access these views degrade gracefully (neutral pillar score or empty tables).
-- `USAGE` on `COMPUTE_WH`.
+- `USAGE` on `SANDBOX_WH`.
 - `CREATE SCHEMA / TABLE` in the chosen history database for history persistence.
 - `SNOWFLAKE.TRUST_CENTER` access for Trust Center features.
 
@@ -400,7 +392,7 @@ All identifiers from user input flow through `_common.safe_id` / `clean_db` to p
 
 ---
 
-## 16. Deployment
+## 15. Deployment
 
 Defined in `snowflake.yml`:
 
@@ -410,11 +402,11 @@ entities:
   streamlit_app:
     type: streamlit
     identifier:
-      database: USER$PHANSIVANG
+      database: <YOUR_DATABASE>
       schema: PUBLIC
       name: GOVERNANCE_AGENT
     title: governance_agent
-    query_warehouse: COMPUTE_WH
+    query_warehouse: SANDBOX_WH
     compute_pool: SYSTEM_COMPUTE_POOL_CPU
     run_mode: SpcsOnly
     execute_as: OWNER
@@ -428,7 +420,7 @@ entities:
 
 ---
 
-## 17. Testing
+## 16. Testing
 
 A `pytest` test suite lives in `tests/` covering every service module. Each test file mocks the Snowflake connection and validates SQL construction, scoring logic, and edge-case handling (missing data, inaccessible `ACCOUNT_USAGE`, empty DataFrames).
 
@@ -446,7 +438,7 @@ pytest -q
 
 ---
 
-## 18. Extension Points
+## 17. Extension Points
 
 - **New PII category:** add a regex entry to `PII_CATEGORIES` in `config.py`.
 - **New scoring pillar:** add a `_score_*` function in `services/scoring.py` and include it in `compute_governance_score()` (total is the sum of the four 25-point pillars).
